@@ -4,9 +4,16 @@ const categoryApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getAllCategories: builder.query({
       query: () => ({
-  url: '/categories',
+        url: '/categories/all',
         method: 'GET'
       }),
+      transformResponse: (response: any) => {
+        const items = response?.data?.categories ?? response?.data ?? [];
+        const data = Array.isArray(items)
+          ? items.map((it: any) => ({ ...it, _id: it.id ?? it._id }))
+          : [];
+        return { ...response, data };
+      },
       providesTags: ['category']
     }),
     createCategory: builder.mutation({

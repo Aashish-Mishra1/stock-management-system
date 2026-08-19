@@ -1,28 +1,43 @@
 export type IProduct = {
-  _id: string
+  id: number
   name: string
   description?: string
-  category: ICategory
-  brand?: IBrand
+  category_id: number
+  category_name?: string
+  brand_id?: number
+  brand_name?: string
+  base_price: number
+  cost_price?: number
+  image_url?: string
+  status: string
+  user_id: number
+  variants?: IVariant[]
+}
+
+export interface IVariant {
+  id: number
+  product_id: number
+  variant_name: string
+  sku?: string
   price: number
-  size?: string
-  stock: number
-  seller: ISeller
+  quantity_in_stock: number
+  attributes?: Record<string, any>
 }
 
 export interface ISeller {
-  _id: string
+  id: number
   name: string
   email: string
-  contactNo: string
+  phone: string
+  address?: string
 }
 
 export interface ICategory {
-  _id: string
+  id: number
   name: string
 }
 
 export interface IBrand {
-  _id: string
+  id: number
   name: string
 }

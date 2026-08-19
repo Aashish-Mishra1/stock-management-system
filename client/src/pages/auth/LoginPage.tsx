@@ -4,6 +4,7 @@ import { FieldValues, useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import toastMessage from '../../lib/toastMessage';
 import { useLoginMutation } from '../../redux/features/authApi';
+import { baseApi } from '../../redux/features/baseApi';
 import { useAppDispatch } from '../../redux/hooks';
 import { loginUser } from '../../redux/services/authSlice';
 import decodeToken from '../../utils/decodeToken';
@@ -27,9 +28,11 @@ const LoginPage = () => {
     try {
       const res = await userLogin(data).unwrap();
 
-      if (res.statusCode === 200) {
+      if (res.success) {
         const user = decodeToken(res.data.token);
         dispatch(loginUser({ token: res.data.token, user }));
+        // Invalidate relevant cached lists so they refetch with the new auth token
+        dispatch(baseApi.util.invalidateTags(['seller', 'category', 'brand']));
         navigate('/');
         toastMessage({ icon: 'success', text: 'Successfully Login!' });
       }
@@ -80,7 +83,7 @@ const LoginPage = () => {
           </Flex>
         </form>
         <p style={{ marginTop: '1rem' }}>
-          Don't have any account? <Link to='/register'>Resister Here</Link>
+          Contact the administrator to create an account.
         </p>
       </Flex>
     </Flex>

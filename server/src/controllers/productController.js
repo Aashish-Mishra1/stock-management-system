@@ -5,7 +5,9 @@ const { Category, Brand } = require('../models/Category');
 const createProduct = async (req, res, next) => {
   try {
     const { name, description, sku, categoryId, brandId, basePrice, costPrice, imageUrl } = req.validatedData.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
+    // accept optional initial stock from un-validated body for convenience
+    const initialStock = req.body && req.body.stock !== undefined ? Number(req.body.stock) : 0;
     
     // Check if SKU already exists
     if (sku) {
@@ -58,6 +60,24 @@ const createProduct = async (req, res, next) => {
       message: 'Product created successfully',
       data: { product: newProduct }
     });
+
+    // If initial stock was provided, create a default variant so aggregated stock is not zero
+    try {
+      if (initialStock && initialStock > 0) {
+        await ProductVariant.create({
+          productId,
+          variantName: 'Default',
+          sku: null,
+          price: Number(basePrice) || 0,
+          quantityInStock: Number(initialStock),
+          attributes: null
+        });
+      }
+    } catch (err) {
+      // do not fail product creation if variant creation fails; log for debugging
+      // eslint-disable-next-line no-console
+      console.error('createProduct: failed to create default variant', err && err.message ? err.message : err);
+    }
     
   } catch (error) {
     next(error);
@@ -66,14 +86,17 @@ const createProduct = async (req, res, next) => {
 
 const getProducts = async (req, res, next) => {
   try {
-    const { page, limit, search, sortBy, sortOrder } = req.validatedData.query;
-    const { categoryId, brandId, status } = req.query;
-    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const { search, sortBy, sortOrder, categoryId, brandId, status, minPrice, maxPrice } = req.query;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const filters = {
       search,
       categoryId: categoryId ? parseInt(categoryId) : undefined,
       brandId: brandId ? parseInt(brandId) : undefined,
+      minPrice: minPrice !== undefined ? Number(minPrice) : undefined,
+      maxPrice: maxPrice !== undefined ? Number(maxPrice) : undefined,
       status,
       sortBy,
       sortOrder
@@ -105,7 +128,7 @@ const getProduct = async (req, res, next) => {
     }
     
     // Check if product belongs to user
-    if (product.user_id !== req.user.id) {
+    if (product.user_id !== (req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null))) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -126,7 +149,7 @@ const updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description, sku, categoryId, brandId, basePrice, costPrice, imageUrl, status } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if product exists and belongs to user
     const existingProduct = await Product.findById(parseInt(id));
@@ -204,7 +227,7 @@ const updateProduct = async (req, res, next) => {
 const deleteProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if product exists and belongs to user
     const product = await Product.findById(parseInt(id));
@@ -238,7 +261,7 @@ const deleteProduct = async (req, res, next) => {
 const createProductVariant = async (req, res, next) => {
   try {
     const { productId, variantName, sku, price, quantityInStock, attributes } = req.validatedData.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if product exists and belongs to user
     const product = await Product.findById(productId);
@@ -285,7 +308,7 @@ const createProductVariant = async (req, res, next) => {
 const getProductVariants = async (req, res, next) => {
   try {
     const { productId } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if product exists and belongs to user
     const product = await Product.findById(parseInt(productId));
@@ -312,17 +335,24 @@ const updateProductVariant = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { variantName, sku, price, quantityInStock, attributes } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
-    // Check if variant exists and belongs to user
+    // Check if variant exists and belongs to user via parent product
     const variant = await ProductVariant.findById(parseInt(id));
-    if (!variant || variant.user_id !== userId) {
+    if (!variant) {
       return res.status(404).json({
         success: false,
         message: 'Product variant not found'
       });
     }
-    
+    const parentProduct = await Product.findById(variant.product_id);
+    if (!parentProduct || parentProduct.user_id !== userId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product variant not found'
+      });
+    }
+
     // Check if SKU is being changed and if new SKU exists
     if (sku && sku !== variant.sku) {
       const variantWithSku = await ProductVariant.findBySku(sku);
@@ -365,11 +395,18 @@ const updateProductVariant = async (req, res, next) => {
 const deleteProductVariant = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
-    // Check if variant exists and belongs to user
+    // Check if variant exists and belongs to user via parent product
     const variant = await ProductVariant.findById(parseInt(id));
-    if (!variant || variant.user_id !== userId) {
+    if (!variant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product variant not found'
+      });
+    }
+    const parentProduct = await Product.findById(variant.product_id);
+    if (!parentProduct || parentProduct.user_id !== userId) {
       return res.status(404).json({
         success: false,
         message: 'Product variant not found'
@@ -395,6 +432,25 @@ const deleteProductVariant = async (req, res, next) => {
   }
 };
 
+const getTotalProducts = async (req, res, next) => {
+  try {
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
+    const [rows] = await require('../config/database').pool.execute(
+      `SELECT COALESCE(SUM(pv.quantity_in_stock), 0) AS totalQuantity
+       FROM products p
+       LEFT JOIN product_variants pv ON pv.product_id = p.id
+       WHERE p.user_id = ?`,
+      [userId]
+    );
+    res.json({
+      success: true,
+      data: { totalQuantity: Number(rows[0].totalQuantity) }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   // Products
   createProduct,
@@ -402,7 +458,8 @@ module.exports = {
   getProduct,
   updateProduct,
   deleteProduct,
-  
+  getTotalProducts,
+
   // Product Variants
   createProductVariant,
   getProductVariants,

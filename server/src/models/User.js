@@ -3,21 +3,21 @@ const bcrypt = require('bcryptjs');
 
 class User {
   static async create(userData) {
-    const { name, email, password, phone, address, role = 'user', avatar } = userData;
+    const { username, email, password, firstName, lastName, role = 'user' } = userData;
     // Hash password
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
     const [result] = await pool.execute(
-      `INSERT INTO users (name, email, password, phone, address, role, avatar) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, passwordHash, phone, address, role, avatar]
+      `INSERT INTO users (username, email, password_hash, first_name, last_name, role) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [username, email, passwordHash, firstName || null, lastName || null, role]
     );
     return result.insertId;
   }
 
   static async findById(id) {
     const [users] = await pool.execute(
-      'SELECT id, name, email, phone, address, role, avatar, is_active, created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, first_name, last_name, role, created_at, updated_at FROM users WHERE id = ?',
       [id]
     );
     return users[0];
@@ -31,8 +31,16 @@ class User {
     return users[0];
   }
 
+  static async findByUsername(username) {
+    const [users] = await pool.execute(
+      'SELECT * FROM users WHERE username = ?',
+      [username]
+    );
+    return users[0];
+  }
+
   static async updateById(id, updateData) {
-    const allowedFields = ['name', 'email', 'phone', 'address', 'role', 'avatar', 'is_active'];
+    const allowedFields = ['username', 'email', 'first_name', 'last_name', 'role'];
     const fields = [];
     const values = [];
     Object.keys(updateData).forEach(key => {
@@ -56,7 +64,7 @@ class User {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(newPassword, saltRounds);
     const [result] = await pool.execute(
-      'UPDATE users SET password = ? WHERE id = ?',
+      'UPDATE users SET password_hash = ? WHERE id = ?',
       [passwordHash, id]
     );
     return result.affectedRows > 0;
@@ -77,19 +85,18 @@ class User {
   static async getAllUsers(page = 1, limit = 10, search = '') {
     const offset = (page - 1) * limit;
     let query = `
-      SELECT id, name, email, phone, address, role, avatar, is_active, created_at 
+      SELECT id, username, email, first_name, last_name, role, created_at, updated_at
       FROM users 
     `;
     let countQuery = 'SELECT COUNT(*) as total FROM users';
     const queryParams = [];
     if (search) {
-      query += ` WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? OR address LIKE ?`;
-      countQuery += ` WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? OR address LIKE ?`;
+      query += ` WHERE username LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ?`;
+      countQuery += ` WHERE username LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ?`;
       const searchParam = `%${search}%`;
       queryParams.push(searchParam, searchParam, searchParam, searchParam);
     }
-    query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
+    query += ` ORDER BY created_at DESC LIMIT ${parseInt(limit) || 10} OFFSET ${parseInt(offset) || 0}`;
     const [users] = await pool.execute(query, queryParams);
     const [totalResult] = await pool.execute(countQuery, search ? [
       `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`

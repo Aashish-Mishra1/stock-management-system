@@ -14,13 +14,13 @@ const register = async (req, res, next) => {
       });
     }
     
-    // const existingUserByUsername = await User.findByUsername(username);
-    // if (existingUserByUsername) {
-    //   return res.status(409).json({
-    //     success: false,
-    //     message: 'User with this username already exists'
-    //   });
-    // }
+    const existingUserByUsername = await User.findByUsername(username);
+    if (existingUserByUsername) {
+      return res.status(409).json({
+        success: false,
+        message: 'User with this username already exists'
+      });
+    }
     
     // Create new user
     const userId = await User.create({
@@ -198,11 +198,14 @@ const changePassword = async (req, res, next) => {
       });
     }
     
-    // Get user with password
-    const user = await User.findByEmail(req.user.email);
+    // Get user with password hash by ID
+    const userRecord = await User.findByEmail(req.user.email);
+    if (!userRecord) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
     
     // Verify current password
-    const isCurrentPasswordValid = await User.verifyPassword(currentPassword, user.password_hash);
+    const isCurrentPasswordValid = await User.verifyPassword(currentPassword, userRecord.password_hash);
     if (!isCurrentPasswordValid) {
       return res.status(400).json({
         success: false,

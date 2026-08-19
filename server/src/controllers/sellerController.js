@@ -5,7 +5,7 @@ const { ProductVariant } = require('../models/Product');
 const createSeller = async (req, res, next) => {
   try {
     const { name, email, phone, address } = req.validatedData.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if seller email already exists for this user
     if (email) {
@@ -41,8 +41,10 @@ const createSeller = async (req, res, next) => {
 
 const getSellers = async (req, res, next) => {
   try {
-    const { page, limit, search } = req.validatedData.query;
-    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const { search } = req.query;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const result = await Seller.findByUserId(userId, page, limit, search);
     
@@ -58,7 +60,7 @@ const getSellers = async (req, res, next) => {
 
 const getAllSellers = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const sellers = await Seller.getAllByUserId(userId);
     
@@ -176,7 +178,7 @@ const deleteSeller = async (req, res, next) => {
     if (!deleted) {
       return res.status(400).json({
         success: false,
-        message: 'Failed to delete seller. It may have associated purchases.'
+        message: 'Failed to delete seller.'
       });
     }
     
@@ -186,6 +188,9 @@ const deleteSeller = async (req, res, next) => {
     });
     
   } catch (error) {
+    if (error.message === 'Cannot delete seller with existing purchases') {
+      return res.status(409).json({ success: false, message: error.message });
+    }
     next(error);
   }
 };
@@ -194,7 +199,7 @@ const deleteSeller = async (req, res, next) => {
 const createPurchase = async (req, res, next) => {
   try {
     const { sellerId, status, items } = req.validatedData.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Validate seller if provided
     if (sellerId) {
@@ -215,7 +220,15 @@ const createPurchase = async (req, res, next) => {
       const { productVariantId, quantity, unitCost } = item;
       
       // Check if product variant exists
-      const variant = await ProductVariant.findById(productVariantId);
+      let variant = await ProductVariant.findById(productVariantId);
+      if (!variant) {
+        // Fallback: maybe frontend passed a product id instead of a variant id
+        const variants = await ProductVariant.findByProductId(productVariantId);
+        if (Array.isArray(variants) && variants.length > 0) {
+          variant = variants[0];
+        }
+      }
+
       if (!variant) {
         return res.status(400).json({
           success: false,
@@ -256,21 +269,26 @@ const createPurchase = async (req, res, next) => {
     });
     
   } catch (error) {
+    if (error.message && error.message.startsWith('Insufficient stock')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     next(error);
   }
 };
 
 const getPurchases = async (req, res, next) => {
   try {
-    const { page, limit } = req.validatedData.query;
-    const { sellerId, status, startDate, endDate } = req.query;
-    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const { sellerId, status, startDate, endDate, search } = req.query;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const filters = {
       sellerId: sellerId ? parseInt(sellerId) : undefined,
       status,
       startDate,
-      endDate
+      endDate,
+      search
     };
     
     const result = await Purchase.findByUserId(userId, page, limit, filters);
@@ -288,7 +306,7 @@ const getPurchases = async (req, res, next) => {
 const getPurchase = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const purchase = await Purchase.findById(parseInt(id));
     
@@ -321,7 +339,7 @@ const updatePurchase = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { sellerId, status } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if purchase exists and belongs to user
     const existingPurchase = await Purchase.findById(parseInt(id));
@@ -372,6 +390,9 @@ const updatePurchase = async (req, res, next) => {
     });
     
   } catch (error) {
+    if (error.message && error.message.startsWith('Insufficient stock')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     next(error);
   }
 };
@@ -379,7 +400,7 @@ const updatePurchase = async (req, res, next) => {
 const deletePurchase = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if purchase exists and belongs to user
     const purchase = await Purchase.findById(parseInt(id));

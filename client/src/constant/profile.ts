@@ -18,32 +18,16 @@ export interface IUser {
 }
 
 export const profileKeys = [
-  { keyName: 'name' },
+  { keyName: 'username' },
   { keyName: 'email' },
-  { keyName: 'title' },
-  { keyName: 'description' },
-  { keyName: 'status' },
-  { keyName: 'address' },
-  { keyName: 'phone' },
-  { keyName: 'city' },
-  { keyName: 'country' },
-  { keyName: 'facebook' },
-  { keyName: 'twitter' },
-  { keyName: 'linkedin' },
-  { keyName: 'instagram' },
+  { keyName: 'first_name' },
+  { keyName: 'last_name' },
+  { keyName: 'role' },
 ]
 
 export const profileInputFields = [
-  { id: 1, name: 'name', label: 'Name' },
+  { id: 1, name: 'username', label: 'Username' },
   { id: 2, name: 'email', label: 'Email' },
-  { id: 3, name: 'title', label: 'Title' },
-  { id: 4, name: 'description', label: 'Description' },
-  { id: 7, name: 'address', label: 'Address' },
-  { id: 8, name: 'phone', label: 'Phone' },
-  { id: 9, name: 'city', label: 'City' },
-  { id: 10, name: 'country', label: 'Country' },
-  { id: 11, name: 'facebook', label: 'Facebook' },
-  { id: 12, name: 'twitter', label: 'Twitter' },
-  { id: 13, name: 'linkedin', label: 'Linkedin' },
-  { id: 14, name: 'instagram', label: 'Instagram' },
+  { id: 3, name: 'firstName', label: 'First Name' },
+  { id: 4, name: 'lastName', label: 'Last Name' },
 ]

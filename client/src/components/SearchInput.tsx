@@ -18,7 +18,8 @@ const SearchInput = ({ setQuery, placeholder = 'Search…' }: SearchInputProps) 
 
   useEffect(() => {
     const debounceId = setTimeout(() => {
-      setQuery((prev) => ({ ...prev, search: searchTerm }));
+      // reset to first page when search term changes
+      setQuery((prev) => ({ ...prev, search: searchTerm, page: 1 }));
     }, 500);
 
     return () => {

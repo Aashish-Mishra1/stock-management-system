@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 const generateToken = (payload) => {
@@ -22,6 +23,5 @@ const decodeToken = (token) => {
 module.exports = {
   generateToken,
   verifyToken,
-  decodeToken,
-  JWT_SECRET
+  decodeToken
 };

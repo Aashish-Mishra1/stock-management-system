@@ -131,11 +131,14 @@ const purchaseSchema = z.object({
 // Pagination schema
 const paginationSchema = z.object({
   query: z.object({
-    page: z.string().transform(val => parseInt(val) || 1),
-    limit: z.string().transform(val => Math.min(parseInt(val) || 10, 100)),
+    page: z.string().optional().transform(val => parseInt(val ?? '1') || 1),
+    limit: z.string().optional().transform(val => Math.min(parseInt(val ?? '10') || 10, 100)),
     search: z.string().optional(),
     sortBy: z.string().optional(),
-    sortOrder: z.enum(['asc', 'desc']).default('desc')
+    sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+    categoryId: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+    brandId: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+    status: z.enum(['active', 'inactive']).optional()
   })
 });
 

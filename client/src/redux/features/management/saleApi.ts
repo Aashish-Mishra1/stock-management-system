@@ -8,6 +8,16 @@ const saleApi = baseApi.injectEndpoints({
         method: 'GET',
         params: query
       }),
+      transformResponse: (response: any) => {
+        const result = response?.data ?? {};
+        const data = result?.sales ?? result ?? [];
+        const meta = {
+          total: result?.total ?? 0,
+          page: result?.page ?? 1,
+          totalPages: result?.totalPages ?? 1,
+        };
+        return { ...response, data, meta };
+      },
       providesTags: ['sale']
     }),
     createSale: builder.mutation({
@@ -27,8 +37,8 @@ const saleApi = baseApi.injectEndpoints({
     }),
     updateSale: builder.mutation({
       query: ({ id, payload }) => ({
-  url: `/sales/${id}`,
-        method: 'PATCH',
+        url: `/sales/${id}`,
+        method: 'PUT',
         body: payload
       }),
       invalidatesTags: ['sale']
@@ -38,6 +48,10 @@ const saleApi = baseApi.injectEndpoints({
   url: `/sales/years`,
         method: 'GET'
       }),
+      transformResponse: (response: any) => {
+        const data = response?.data ?? [];
+        return { ...response, data };
+      },
       providesTags: ['sale']
     }),
     monthlySale: builder.query({
@@ -45,6 +59,10 @@ const saleApi = baseApi.injectEndpoints({
   url: `/sales/months`,
         method: 'GET'
       }),
+      transformResponse: (response: any) => {
+        const data = response?.data ?? [];
+        return { ...response, data };
+      },
       providesTags: ['sale']
     }),
     weeklySale: builder.query({
@@ -52,6 +70,10 @@ const saleApi = baseApi.injectEndpoints({
   url: `/sales/weeks`,
         method: 'GET'
       }),
+      transformResponse: (response: any) => {
+        const data = response?.data ?? [];
+        return { ...response, data };
+      },
       providesTags: ['sale']
     }),
     dailySale: builder.query({
@@ -59,6 +81,10 @@ const saleApi = baseApi.injectEndpoints({
   url: `/sales/days`,
         method: 'GET'
       }),
+      transformResponse: (response: any) => {
+        const data = response?.data ?? [];
+        return { ...response, data };
+      },
       providesTags: ['sale']
     }),
   })

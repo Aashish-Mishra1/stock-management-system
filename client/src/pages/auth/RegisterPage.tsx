@@ -33,7 +33,7 @@ const RegisterPage = () => {
         lastName: data.lastName
       };
       const res = await userRegistration(payload).unwrap();
-      if (res.statusCode === 201) {
+      if (res.success) {
         const user = decodeToken(res.data.token);
         dispatch(loginUser({ token: res.data.token, user }));
         navigate('/');

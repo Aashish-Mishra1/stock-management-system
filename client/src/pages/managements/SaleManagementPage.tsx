@@ -23,14 +23,16 @@ const SaleManagementPage = () => {
     setQuery((prev) => ({ ...prev, page: page }));
   };
 
-  const tableData = data?.data?.map((sale: ITableSale) => ({
-    key: sale._id,
-    productName: sale.productName,
-    productPrice: sale.productPrice,
-    buyerName: sale.buyerName,
-    quantity: sale.quantity,
-    totalPrice: sale.totalPrice,
-    date: formatDate(sale.date),
+  const items = Array.isArray((data as any)) ? (data as any) : (data?.data ?? []);
+
+  const tableData = items.map((sale: any) => ({
+    key: sale.sale_item_id ?? sale.id ?? sale._id ?? sale.sale_id,
+    productName: sale.product_name ?? sale.productName ?? '',
+    productPrice: Number(sale.unit_price ?? sale.productPrice ?? sale.unitPrice ?? 0),
+    buyerName: sale.customer_name ?? sale.buyerName ?? '',
+    quantity: Number(sale.quantity ?? 0),
+    totalPrice: Number(sale.total_price ?? sale.totalPrice ?? 0),
+    date: formatDate(sale.sale_date ?? sale.date),
   }));
 
   const columns: TableColumnsType<any> = [
@@ -170,7 +172,7 @@ const DeleteModal = ({ id }: { id: string }) => {
   const handleDelete = async (id: string) => {
     try {
       const res = await deleteSale(id).unwrap();
-      if (res.statusCode === 200) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         handleCancel();
       }

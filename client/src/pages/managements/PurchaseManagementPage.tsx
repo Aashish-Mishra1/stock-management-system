@@ -26,15 +26,17 @@ const PurchaseManagementPage = () => {
     setQuery((prev) => ({ ...prev, page: page }));
   };
 
-  const tableData = data?.data?.map((purchase: IPurchase) => ({
-    key: purchase._id,
-    sellerName: purchase.sellerName,
-    productName: purchase.productName,
-    price: purchase.unitPrice,
-    quantity: purchase.quantity,
-    totalPrice: purchase.totalPrice,
-    due: purchase.totalPrice - purchase.paid,
-    date: formatDate(purchase.createdAt),
+  const items = Array.isArray((data as any)) ? (data as any) : (data?.data ?? []);
+
+  const tableData = items.map((purchase: any) => ({
+    key: purchase.purchase_item_id ?? purchase.id ?? purchase._id ?? purchase.purchase_id,
+    sellerName: purchase.seller_name ?? purchase.sellerName ?? '',
+    productName: purchase.product_name ?? purchase.productName ?? '',
+    price: Number(purchase.unit_cost ?? purchase.unitCost ?? purchase.price ?? 0),
+    quantity: Number(purchase.quantity ?? 0),
+    totalPrice: Number(purchase.total_cost ?? purchase.totalCost ?? purchase.totalPrice ?? 0),
+    due: Number((purchase.total_cost ?? purchase.totalPrice ?? 0) - (purchase.paid ?? 0)),
+    date: formatDate(purchase.purchase_date ?? purchase.purchaseDate ?? purchase.purchase_date ?? purchase.date),
   }));
 
   const columns: TableColumnsType<any> = [
@@ -169,7 +171,7 @@ const DeleteModal = ({ id }: { id: string }) => {
   const handleDelete = async (id: string) => {
     try {
       const res = await deletePurchase(id).unwrap();
-      if (res.statusCode === 200) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         handleCancel();
       }

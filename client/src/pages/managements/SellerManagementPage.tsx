@@ -24,11 +24,13 @@ const SellerManagementPage = () => {
     setQuery((prev) => ({ ...prev, page: page }));
   };
 
-  const tableData = data?.data?.map((seller: ISeller) => ({
-    key: seller._id,
+  const items = Array.isArray((data as any)) ? (data as any) : (data?.data ?? []);
+
+  const tableData = items.map((seller: ISeller) => ({
+    key: (seller as any)._id ?? (seller as any).id,
     name: seller.name,
     email: seller.email,
-    contactNo: seller.contactNo,
+    contactNo: (seller as any).contactNo || (seller as any).phone || '',
   }));
 
   const columns: TableColumnsType<any> = [
@@ -140,7 +142,7 @@ const DeleteModal = ({ id }: { id: string }) => {
   const handleDelete = async (id: string) => {
     try {
       const res = await deleteSeller(id).unwrap();
-      if (res.statusCode === 200) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         handleCancel();
       }

@@ -6,7 +6,7 @@ class Category {
     
     const [result] = await pool.execute(
       'INSERT INTO categories (name, description, user_id) VALUES (?, ?, ?)',
-      [name, description, userId]
+      [name, description ?? null, userId ?? null]
     );
     
     return result.insertId;
@@ -21,6 +21,8 @@ class Category {
   }
 
   static async findByUserId(userId, page = 1, limit = 10, search = '') {
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
     const offset = (page - 1) * limit;
     let query = `
       SELECT c.*, COUNT(p.id) as product_count
@@ -39,8 +41,7 @@ class Category {
       queryParams.push(searchParam, searchParam);
     }
     
-    query += ` GROUP BY c.id ORDER BY c.created_at DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
+    query += ` GROUP BY c.id ORDER BY c.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
     
     const [categories] = await pool.execute(query, queryParams);
     
@@ -108,7 +109,7 @@ class Category {
   static async findByName(name, userId) {
     const [categories] = await pool.execute(
       'SELECT * FROM categories WHERE name = ? AND user_id = ?',
-      [name, userId]
+      [name, userId ?? null]
     );
     return categories[0];
   }
@@ -116,7 +117,7 @@ class Category {
   static async getAllByUserId(userId) {
     const [categories] = await pool.execute(
       'SELECT id, name FROM categories WHERE user_id = ? ORDER BY name',
-      [userId]
+      [userId ?? null]
     );
     return categories;
   }
@@ -128,7 +129,7 @@ class Brand {
     
     const [result] = await pool.execute(
       'INSERT INTO brands (name, description, user_id) VALUES (?, ?, ?)',
-      [name, description, userId]
+      [name, description ?? null, userId ?? null]
     );
     
     return result.insertId;
@@ -143,6 +144,8 @@ class Brand {
   }
 
   static async findByUserId(userId, page = 1, limit = 10, search = '') {
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
     const offset = (page - 1) * limit;
     let query = `
       SELECT b.*, COUNT(p.id) as product_count
@@ -161,8 +164,7 @@ class Brand {
       queryParams.push(searchParam, searchParam);
     }
     
-    query += ` GROUP BY b.id ORDER BY b.created_at DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
+    query += ` GROUP BY b.id ORDER BY b.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
     
     const [brands] = await pool.execute(query, queryParams);
     
@@ -230,7 +232,7 @@ class Brand {
   static async findByName(name, userId) {
     const [brands] = await pool.execute(
       'SELECT * FROM brands WHERE name = ? AND user_id = ?',
-      [name, userId]
+      [name, userId ?? null]
     );
     return brands[0];
   }
@@ -238,7 +240,7 @@ class Brand {
   static async getAllByUserId(userId) {
     const [brands] = await pool.execute(
       'SELECT id, name FROM brands WHERE user_id = ? ORDER BY name',
-      [userId]
+      [userId ?? null]
     );
     return brands;
   }

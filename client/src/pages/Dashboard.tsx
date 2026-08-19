@@ -4,10 +4,19 @@ import Loader from '../components/Loader';
 import { useCountProductsQuery } from '../redux/features/management/productApi';
 import { useYearlySaleQuery } from '../redux/features/management/saleApi';
 import DailyChart from '../components/Charts/DailyChart';
+import SmallProductList from '../components/SmallProductList';
 
 const Dashboard = () => {
-  const { data: products, isLoading } = useCountProductsQuery(undefined);
-  const { data: yearlyData, isLoading: isLoading1 } = useYearlySaleQuery(undefined);
+  const { data: products, isLoading } = useCountProductsQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
+  const { data: yearlyData, isLoading: isLoading1 } = useYearlySaleQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
 
   if (isLoading && isLoading1) return <Loader />;
   else
@@ -44,16 +53,31 @@ const Dashboard = () => {
             </div>
           </Col>
         </Row>
-        <div
-          style={{
-            border: '1px solid gray',
-            margin: '1rem',
-            padding: '1rem',
-            borderRadius: '10px',
-          }}
-        >
-          <h1 style={{ textAlign: 'center', marginBottom: '.5rem' }}>Daily Sale and Revenue</h1>
-          <DailyChart />
+        <div style={{ display: 'flex', gap: '1rem', margin: '1rem' }}>
+          <div
+            style={{
+              flex: 2,
+              border: '1px solid gray',
+              padding: '1rem',
+              borderRadius: '10px',
+            }}
+          >
+            <h1 style={{ textAlign: 'center', marginBottom: '.5rem' }}>Daily Sale and Revenue</h1>
+            <DailyChart />
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              border: '1px solid gray',
+              padding: '1rem',
+              borderRadius: '10px',
+              minWidth: '300px',
+            }}
+          >
+            <h2 style={{ textAlign: 'center', marginBottom: '.5rem' }}>Latest Products</h2>
+            <SmallProductList />
+          </div>
         </div>
         <div
           style={{

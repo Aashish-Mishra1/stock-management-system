@@ -21,8 +21,15 @@ const CreateSellerModal = ({ openModal, setOpenModal }: CreateSellerModalProps) 
 
   const onSubmit = async (data: FieldValues) => {
     try {
-      const res = await createSeller(data).unwrap();
-      if (res.statusCode === 201) {
+      // Build payload only with provided, non-empty values so validation schema receives proper types
+      const payload: any = {};
+      if (data.name && String(data.name).trim() !== '') payload.name = String(data.name).trim();
+      if (data.email && String(data.email).trim() !== '') payload.email = String(data.email).trim();
+      if (data.contactNo && String(data.contactNo).trim() !== '') payload.phone = String(data.contactNo).trim();
+      if ((data as any).address && String((data as any).address).trim() !== '') payload.address = String((data as any).address).trim();
+
+      const res = await createSeller(payload).unwrap();
+      if (res.success) {
         reset();
         toastMessage({ icon: 'success', text: res.message });
         setOpenModal(false);

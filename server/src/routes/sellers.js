@@ -1,11 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
-const { 
-  validateRequest, 
-  sellerSchema, 
-  paginationSchema 
-} = require('../middleware/validation');
+const { validateRequest, sellerSchema } = require('../middleware/validation');
 const {
   createSeller,
   getSellers,
@@ -19,7 +15,7 @@ const {
 router.use(authenticate);
 
 // Seller routes
-router.get('/', validateRequest(paginationSchema), getSellers);
+router.get('/', getSellers);
 router.get('/all', getAllSellers);
 router.post('/', validateRequest(sellerSchema), createSeller);
 router.get('/:id', getSeller);

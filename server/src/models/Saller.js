@@ -6,7 +6,7 @@ class Seller {
     
     const [result] = await pool.execute(
       'INSERT INTO sellers (name, email, phone, address, user_id) VALUES (?, ?, ?, ?, ?)',
-      [name, email, phone, address, userId]
+      [name, email ?? null, phone ?? null, address ?? null, userId ?? null]
     );
     
     return result.insertId;
@@ -21,6 +21,8 @@ class Seller {
   }
 
   static async findByUserId(userId, page = 1, limit = 10, search = '') {
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
     const offset = (page - 1) * limit;
     let query = `
       SELECT s.*, COUNT(p.id) as total_purchases
@@ -29,7 +31,7 @@ class Seller {
       WHERE s.user_id = ?
     `;
     
-    let countQuery = 'SELECT COUNT(*) as total FROM sellers WHERE user_id = ?';
+    let countQuery = 'SELECT COUNT(*) as total FROM sellers s WHERE s.user_id = ?';
     const queryParams = [userId];
     
     if (search) {
@@ -39,8 +41,7 @@ class Seller {
       queryParams.push(searchParam, searchParam, searchParam);
     }
     
-    query += ` GROUP BY s.id ORDER BY s.created_at DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
+    query += ` GROUP BY s.id ORDER BY s.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
     
     const [sellers] = await pool.execute(query, queryParams);
     
@@ -108,7 +109,7 @@ class Seller {
   static async findByEmail(email, userId) {
     const [sellers] = await pool.execute(
       'SELECT * FROM sellers WHERE email = ? AND user_id = ?',
-      [email, userId]
+      [email, userId ?? null]
     );
     return sellers[0];
   }
@@ -116,7 +117,7 @@ class Seller {
   static async getAllByUserId(userId) {
     const [sellers] = await pool.execute(
       'SELECT id, name FROM sellers WHERE user_id = ? ORDER BY name',
-      [userId]
+      [userId ?? null]
     );
     return sellers;
   }
@@ -125,12 +126,19 @@ class Seller {
 class Purchase {
   static async create(purchaseData, items) {
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
-      const { sellerId, userId, status = 'pending', totalAmount } = purchaseData;
-      
+
+      // Defensive: log incoming payload for debugging
+      // eslint-disable-next-line no-console
+      console.log('Purchase.create payload:', { purchaseData, itemsLength: Array.isArray(items) ? items.length : 0 });
+
+      let { sellerId, userId, status = 'pending', totalAmount } = purchaseData;
+      sellerId = sellerId ? Number(sellerId) : null;
+      userId = Number(userId);
+      totalAmount = Number(totalAmount) || 0;
+
       // Create purchase record
       const [purchaseResult] = await connection.execute(
         `INSERT INTO purchases (seller_id, user_id, status, total_amount) 
@@ -143,29 +151,33 @@ class Purchase {
       // Create purchase items and update stock if completed
       for (const item of items) {
         const { productVariantId, quantity, unitCost } = item;
-        const totalCost = quantity * unitCost;
+        const pvId = Number(productVariantId);
+        const qty = Number(quantity);
+        const cost = Number(unitCost);
+        const totalCost = qty * cost;
         
         // Create purchase item
         await connection.execute(
           `INSERT INTO purchase_items (purchase_id, product_variant_id, quantity, unit_cost, total_cost) 
            VALUES (?, ?, ?, ?, ?)`,
-          [purchaseId, productVariantId, quantity, unitCost, totalCost]
+          [purchaseId, pvId, qty, cost, totalCost]
         );
         
         // Update stock if purchase is completed
         if (status === 'completed') {
           await connection.execute(
             'UPDATE product_variants SET quantity_in_stock = quantity_in_stock + ? WHERE id = ?',
-            [quantity, productVariantId]
+            [qty, pvId]
           );
         }
       }
       
       await connection.commit();
       return purchaseId;
-      
     } catch (error) {
       await connection.rollback();
+      // eslint-disable-next-line no-console
+      console.error('Purchase.create error:', error && error.message ? error.message : error);
       throw error;
     } finally {
       connection.release();
@@ -201,59 +213,76 @@ class Purchase {
   }
 
   static async findByUserId(userId, page = 1, limit = 10, filters = {}) {
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
     const offset = (page - 1) * limit;
-    let query = `
-      SELECT p.*, s.name as seller_name, COUNT(pi.id) as total_items
-      FROM purchases p
-      LEFT JOIN sellers s ON p.seller_id = s.id
-      LEFT JOIN purchase_items pi ON p.id = pi.purchase_id
-      WHERE p.user_id = ?
+
+    // Return flattened purchase items joined with product and purchase metadata
+    let baseQuery = `
+      SELECT pi.id as purchase_item_id, pi.purchase_id, pi.product_variant_id, pi.quantity, pi.unit_cost, pi.total_cost,
+             pv.variant_name, p.name as product_name,
+             s.name as seller_name, pch.purchase_date, pch.total_amount as purchase_total
+      FROM purchase_items pi
+      JOIN purchases pch ON pi.purchase_id = pch.id
+      LEFT JOIN product_variants pv ON pi.product_variant_id = pv.id
+      LEFT JOIN products p ON pv.product_id = p.id
+      LEFT JOIN sellers s ON pch.seller_id = s.id
+      WHERE pch.user_id = ?
     `;
-    
-    let countQuery = 'SELECT COUNT(*) as total FROM purchases WHERE user_id = ?';
-    const queryParams = [userId];
-    
-    // Apply filters
-    if (filters.sellerId) {
-      query += ` AND p.seller_id = ?`;
-      countQuery += ` AND p.seller_id = ?`;
-      queryParams.push(filters.sellerId);
+
+    const params = [userId];
+
+    if (filters && filters.sellerId) {
+      baseQuery += ` AND pch.seller_id = ?`;
+      params.push(filters.sellerId);
     }
-    
-    if (filters.status) {
-      query += ` AND p.status = ?`;
-      countQuery += ` AND p.status = ?`;
-      queryParams.push(filters.status);
+    if (filters && filters.search) {
+      baseQuery += ` AND (p.name LIKE ? OR s.name LIKE ?)`;
+      const sp = `%${filters.search}%`;
+      params.push(sp, sp);
     }
-    
-    if (filters.startDate) {
-      query += ` AND p.purchase_date >= ?`;
-      countQuery += ` AND p.purchase_date >= ?`;
-      queryParams.push(filters.startDate);
+    if (filters && filters.status) {
+      baseQuery += ` AND pch.status = ?`;
+      params.push(filters.status);
     }
-    
-    if (filters.endDate) {
-      query += ` AND p.purchase_date <= ?`;
-      countQuery += ` AND p.purchase_date <= ?`;
-      queryParams.push(filters.endDate);
+    if (filters && filters.startDate) {
+      baseQuery += ` AND pch.purchase_date >= ?`;
+      params.push(filters.startDate);
     }
-    
-    query += ` GROUP BY p.id ORDER BY p.purchase_date DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
-    
-    const [purchases] = await pool.execute(query, queryParams);
-    
-    // Get total count
+    if (filters && filters.endDate) {
+      baseQuery += ` AND pch.purchase_date <= ?`;
+      params.push(filters.endDate);
+    }
+
+    baseQuery += ` ORDER BY pch.purchase_date DESC LIMIT ${limit} OFFSET ${offset}`;
+
+    const [rows] = await pool.execute(baseQuery, params);
+
+    // total count
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM purchase_items pi
+      JOIN purchases pch ON pi.purchase_id = pch.id
+      LEFT JOIN product_variants pv ON pi.product_variant_id = pv.id
+      LEFT JOIN products p ON pv.product_id = p.id
+      LEFT JOIN sellers s ON pch.seller_id = s.id
+      WHERE pch.user_id = ?
+    `;
     const countParams = [userId];
-    if (filters.sellerId) countParams.push(filters.sellerId);
-    if (filters.status) countParams.push(filters.status);
-    if (filters.startDate) countParams.push(filters.startDate);
-    if (filters.endDate) countParams.push(filters.endDate);
-    
+    if (filters && filters.sellerId) countParams.push(filters.sellerId);
+    if (filters && filters.status) countParams.push(filters.status);
+    if (filters && filters.startDate) countParams.push(filters.startDate);
+    if (filters && filters.endDate) countParams.push(filters.endDate);
+    if (filters && filters.search) {
+      countQuery += ` AND (p.name LIKE ? OR s.name LIKE ?)`;
+      const sp = `%${filters.search}%`;
+      countParams.push(sp, sp);
+    }
+
     const [totalResult] = await pool.execute(countQuery, countParams);
-    
+
     return {
-      purchases,
+      purchases: rows,
       total: totalResult[0].total,
       page,
       totalPages: Math.ceil(totalResult[0].total / limit)
@@ -325,13 +354,20 @@ class Purchase {
           );
         }
       } else if (currentStatus === 'completed' && newStatus === 'cancelled') {
-        // Remove stock when cancelling completed purchase
+        // Remove stock when cancelling completed purchase — guard against negative stock
         const [items] = await connection.execute(
           'SELECT product_variant_id, quantity FROM purchase_items WHERE purchase_id = ?',
           [id]
         );
         
         for (const item of items) {
+          const [stockRow] = await connection.execute(
+            'SELECT quantity_in_stock FROM product_variants WHERE id = ?',
+            [item.product_variant_id]
+          );
+          if (!stockRow[0] || stockRow[0].quantity_in_stock < item.quantity) {
+            throw new Error(`Insufficient stock to cancel purchase for variant ${item.product_variant_id}`);
+          }
           await connection.execute(
             'UPDATE product_variants SET quantity_in_stock = quantity_in_stock - ? WHERE id = ?',
             [item.quantity, item.product_variant_id]

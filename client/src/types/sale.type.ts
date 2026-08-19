@@ -1,22 +1,21 @@
-export interface ISale {
-  product: string;
-  quantity: number;
-  buyerName: string;
-  date: string;
-  price: number
+export interface ITableSale {
+  id: number;
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  total_amount: number;
+  payment_method: string;
+  sale_date: string;
+  total_items: number;
+  items?: ISaleItem[];
 }
 
-export interface ITableSale {
-  _id: string;
-  product: {
-    _id: string;
-    name: string;
-    price: number;
-  }
-  productPrice: number;
-  productName: string;
+export interface ISaleItem {
+  id: number;
+  product_variant_id: number;
+  variant_name: string;
+  product_name: string;
   quantity: number;
-  buyerName: string;
-  date: string;
-  totalPrice: number
+  unit_price: number;
+  total_price: number;
 }

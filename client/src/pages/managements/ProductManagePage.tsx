@@ -1,14 +1,14 @@
 import { DeleteFilled, EditFilled } from '@ant-design/icons';
 import type { PaginationProps, TableColumnsType } from 'antd';
 import { Button, Col, Flex, Modal, Pagination, Row, Table, Tag } from 'antd';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FieldValues, useForm } from 'react-hook-form';
 import {
-  useAddStockMutation,
   useDeleteProductMutation,
   useGetAllProductsQuery,
   useUpdateProductMutation,
 } from '../../redux/features/management/productApi';
+import { useCreatePurchaseMutation } from '../../redux/features/management/purchaseApi';
 import { ICategory, IProduct } from '../../types/product.types';
 import ProductManagementFilter from '../../components/query-filters/ProductManagementFilter';
 import CustomInput from '../../components/CustomInput';
@@ -17,6 +17,7 @@ import { useGetAllCategoriesQuery } from '../../redux/features/management/catego
 import { useGetAllSellerQuery } from '../../redux/features/management/sellerApi';
 import { useGetAllBrandsQuery } from '../../redux/features/management/brandApi';
 import { useCreateSaleMutation } from '../../redux/features/management/saleApi';
+import { useGetProductVariantsQuery } from '../../redux/features/management/productApi';
 import { SpinnerIcon } from '@phosphor-icons/react';
 
 const ProductManagePage = () => {
@@ -26,24 +27,39 @@ const ProductManagePage = () => {
     category: '',
     brand: '',
     limit: 10,
+    minPrice: 100,
+    maxPrice: 1000,
   });
 
-  const { data: products, isFetching } = useGetAllProductsQuery(query);
+  const apiQuery = {
+    page: current,
+    limit: query.limit,
+    search: query.name ?? undefined,
+    categoryId: query.category ?? undefined,
+    brandId: query.brand ?? undefined,
+    minPrice: (query as any).minPrice ?? undefined,
+    maxPrice: (query as any).maxPrice ?? undefined,
+  };
+
+  const { data: products, isFetching } = useGetAllProductsQuery(apiQuery);
 
   const onChange: PaginationProps['onChange'] = (page) => {
     setCurrent(page);
   };
 
-  const tableData = products?.data?.map((product: IProduct) => ({
-    key: product._id,
+  const prodItems = Array.isArray((products as any)) ? (products as any) : (products?.data ?? []);
+
+  const tableData = prodItems.map((product: IProduct) => ({
+    key: (product as any)._id ?? (product as any).id,
     name: product.name,
     category: product.category,
-    categoryName: product.category.name,
-    price: product.price,
-    stock: product.stock,
+    categoryName: product.category?.name ?? product.category_name ?? '',
+    price: (product as any).price ?? (product as any).base_price ?? 0,
+    stock: (product as any).stock ?? (product as any).quantity_in_stock ?? 0,
     seller: product?.seller,
     sellerName: product?.seller?.name || 'DELETED SELLER',
     brand: product.brand,
+    brandName: product.brand_name ?? product.brand?.name ?? '',
     size: product.size,
     description: product.description,
   }));
@@ -58,6 +74,12 @@ const ProductManagePage = () => {
       title: 'Category',
       key: 'categoryName',
       dataIndex: 'categoryName',
+      align: 'center',
+    },
+    {
+      title: 'Brand',
+      key: 'brandName',
+      dataIndex: 'brandName',
       align: 'center',
     },
     {
@@ -100,9 +122,23 @@ const ProductManagePage = () => {
     },
   ];
 
+  const clearFilters = () => {
+    setQuery({ name: '', category: '', brand: '', limit: 10, minPrice: 100, maxPrice: 1000 });
+    setCurrent(1);
+  };
+
   return (
     <>
-      <ProductManagementFilter query={query} setQuery={setQuery} />
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <ProductManagementFilter query={query} setQuery={setQuery} />
+        </div>
+        <div>
+          <Button onClick={clearFilters} style={{ height: '40px' }}>
+            Clear Filters
+          </Button>
+        </div>
+      </div>
       <Table
         size='small'
         loading={isFetching}
@@ -127,6 +163,16 @@ const ProductManagePage = () => {
  */
 const SellProductModal = ({ product }: { product: IProduct & { key: string } }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
+  const { data: variantsResp } = useGetProductVariantsQuery(product.key);
+
+  // when variants load, default to first
+  useEffect(() => {
+    if (variantsResp?.data && variantsResp.data.length > 0) {
+      const first = variantsResp.data[0];
+      setSelectedVariantId(first.id ?? first.ID ?? first._id ?? null);
+    }
+  }, [variantsResp]);
   const {
     handleSubmit,
     register,
@@ -136,17 +182,24 @@ const SellProductModal = ({ product }: { product: IProduct & { key: string } }) 
   const [saleProduct, { isLoading }] = useCreateSaleMutation();
 
   const onSubmit = async (data: FieldValues) => {
+    const variantIdToUse = selectedVariantId ?? Number(product.key);
+    const selectedVariant = variantsResp?.data?.find((v: any) => Number(v.id ?? v._id) === Number(variantIdToUse));
+    const unitPriceToUse = selectedVariant ? Number(selectedVariant.price ?? selectedVariant.unit_price ?? product.price ?? product.base_price ?? 0) : Number(product.price ?? product.base_price ?? 0);
     const payload = {
-      product: product.key,
-      productName: product.name,
-      productPrice: product.price,
-      quantity: Number(data.quantity),
-      buyerName: data.buyerName,
+      customerName: data.buyerName,
+      items: [
+        {
+          productVariantId: Number(variantIdToUse),
+          quantity: Number(data.quantity),
+          unitPrice: unitPriceToUse,
+        },
+      ],
+      paymentMethod: data.paymentMethod ?? 'cash',
       date: data.date,
     };
     try {
       const res = await saleProduct(payload).unwrap();
-      if (res.statusCode === 201) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         reset();
         handleCancel();
@@ -185,6 +238,22 @@ const SellProductModal = ({ product }: { product: IProduct & { key: string } }) 
             register={register}
             type='text'
           />
+          {variantsResp?.data && variantsResp.data.length > 0 ? (
+            <div style={{ margin: '0 1rem 1rem 0' }}>
+              <label className='label'>Variant</label>
+              <select
+                className='input-field'
+                value={selectedVariantId ?? ''}
+                onChange={(e) => setSelectedVariantId(Number(e.target.value))}
+              >
+                {variantsResp.data.map((v: any) => (
+                  <option key={v.id ?? v._id} value={v.id ?? v._id}>
+                    {v.variant_name ?? v.variantName ?? v.variantName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <CustomInput
             name='date'
             label='Selling date'
@@ -219,24 +288,32 @@ const SellProductModal = ({ product }: { product: IProduct & { key: string } }) 
 const AddStockModal = ({ product }: { product: IProduct & { key: string } }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { handleSubmit, register, reset } = useForm();
-  const [addToStock, { isLoading }] = useAddStockMutation();
+  const [createPurchase, { isLoading }] = useCreatePurchaseMutation();
 
   const onSubmit = async (data: FieldValues) => {
+    const sellerIdRaw = product.seller?._id ?? product.seller ?? product.seller?.id ?? undefined;
     const payload = {
-      stock: Number(data.stock),
-      seller: product.seller,
+      sellerId: sellerIdRaw ? Number(sellerIdRaw) : undefined,
+      status: 'completed',
+      items: [
+        {
+          productVariantId: Number(product.key),
+          quantity: Number(data.stock),
+          unitCost: Number(product.price || 0),
+        },
+      ],
     };
 
     try {
-      const res = await addToStock({ id: product.key, payload }).unwrap();
-      if (res.statusCode === 200) {
+      const res = await createPurchase(payload).unwrap();
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         reset();
         handleCancel();
       }
     } catch (error: any) {
       handleCancel();
-      toastMessage({ icon: 'error', text: error.data.message });
+      toastMessage({ icon: 'error', text: error.data?.message || error.message });
     }
   };
 
@@ -282,6 +359,11 @@ const UpdateProductModal = ({ product }: { product: IProduct & { key: string } }
   const { data: sellers, isLoading: isSellerLoading } = useGetAllSellerQuery(undefined);
   const { data: brands } = useGetAllBrandsQuery(undefined);
 
+  const sellerDefault = product?.seller?._id ?? product?.seller ?? product?.seller?.id ?? '';
+  const categoryDefault =
+    product?.category?._id ?? product?.category ?? product?.category?.id ?? product?.category_id ?? '';
+  const brandDefault = product?.brand?._id ?? product?.brand ?? product?.brand?.id ?? '';
+
   const {
     handleSubmit,
     register,
@@ -291,9 +373,9 @@ const UpdateProductModal = ({ product }: { product: IProduct & { key: string } }
     defaultValues: {
       name: product.name,
       price: product.price,
-      seller: product?.seller?._id,
-      category: product.category._id,
-      brand: product.brand?._id,
+      seller: sellerDefault,
+      category: categoryDefault,
+      brand: brandDefault,
       description: product.description,
       size: product.size,
     },
@@ -303,7 +385,7 @@ const UpdateProductModal = ({ product }: { product: IProduct & { key: string } }
   const onSubmit = async (data: FieldValues) => {
     try {
       const res = await updateProduct({ id: product.key, payload: data }).unwrap();
-      if (res.statusCode === 200) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         reset();
         handleCancel();
@@ -362,8 +444,8 @@ const UpdateProductModal = ({ product }: { product: IProduct & { key: string } }
                 className={`input-field ${errors['seller'] ? 'input-field-error' : ''}`}
               >
                 <option value=''>Select Seller*</option>
-                {sellers?.data.map((item: ICategory) => (
-                  <option value={item._id} key={item._id}>
+                {sellers?.data?.map((item: any) => (
+                  <option value={item._id ?? item.id} key={item._id ?? item.id}>
                     {item.name}
                   </option>
                 ))}
@@ -383,8 +465,8 @@ const UpdateProductModal = ({ product }: { product: IProduct & { key: string } }
                 className={`input-field ${errors['category'] ? 'input-field-error' : ''}`}
               >
                 <option value=''>Select Category*</option>
-                {categories?.data.map((item: ICategory) => (
-                  <option value={item._id} key={item._id}>
+                {categories?.data?.map((item: any) => (
+                  <option value={item._id ?? item.id} key={item._id ?? item.id}>
                     {item.name}
                   </option>
                 ))}
@@ -404,8 +486,8 @@ const UpdateProductModal = ({ product }: { product: IProduct & { key: string } }
                 className={`input-field ${errors['brand'] ? 'input-field-error' : ''}`}
               >
                 <option value=''>Select brand</option>
-                {brands?.data.map((item: ICategory) => (
-                  <option value={item._id} key={item._id}>
+                {brands?.data?.map((item: any) => (
+                  <option value={item._id ?? item.id} key={item._id ?? item.id}>
                     {item.name}
                   </option>
                 ))}
@@ -463,7 +545,7 @@ const DeleteProductModal = ({ id }: { id: string }) => {
   const handleDelete = async (id: string) => {
     try {
       const res = await deleteProduct(id).unwrap();
-      if (res.statusCode === 200) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         handleCancel();
       }

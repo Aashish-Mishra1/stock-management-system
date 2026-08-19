@@ -30,7 +30,7 @@ const SaleModal = () => {
     try {
       const res = await createNewSale(payload).unwrap();
 
-      if (res.statusCode === 201) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         dispatch(toggleSaleModel({ open: false, data: null }));
         setUpdateDate({ buyerName: '', quantity: '', date: '' });

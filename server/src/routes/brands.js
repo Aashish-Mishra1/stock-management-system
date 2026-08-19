@@ -1,11 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
-const { 
-  validateRequest, 
-  brandSchema, 
-  paginationSchema 
-} = require('../middleware/validation');
+const { validateRequest, brandSchema } = require('../middleware/validation');
 const {
   createBrand,
   getBrands,
@@ -19,7 +15,7 @@ const {
 router.use(authenticate);
 
 // Brand routes
-router.get('/', validateRequest(paginationSchema), getBrands);
+router.get('/', getBrands);
 router.get('/all', getAllBrands);
 router.post('/', validateRequest(brandSchema), createBrand);
 router.get('/:id', getBrand);

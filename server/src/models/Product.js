@@ -11,7 +11,18 @@ class Product {
       `INSERT INTO products (name, description, sku, category_id, brand_id, user_id, 
                             base_price, cost_price, image_url, status) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, description, sku, categoryId, brandId, userId, basePrice, costPrice, imageUrl, status]
+      [
+        name,
+        description ?? null,
+        sku ?? null,
+        categoryId ?? null,
+        brandId ?? null,
+        userId ?? null,
+        basePrice ?? null,
+        costPrice ?? null,
+        imageUrl ?? null,
+        status
+      ]
     );
     
     return result.insertId;
@@ -32,9 +43,16 @@ class Product {
   }
 
   static async findByUserId(userId, page = 1, limit = 10, filters = {}) {
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
     const offset = (page - 1) * limit;
     let query = `
-      SELECT p.*, c.name as category_name, b.name as brand_name
+      SELECT p.*, c.name as category_name, b.name as brand_name,
+             (
+               SELECT COALESCE(SUM(pv.quantity_in_stock), 0)
+               FROM product_variants pv
+               WHERE pv.product_id = p.id
+             ) AS quantity_in_stock
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN brands b ON p.brand_id = b.id
@@ -63,6 +81,18 @@ class Product {
       countQuery += ` AND p.brand_id = ?`;
       queryParams.push(filters.brandId);
     }
+
+    if (filters.minPrice !== undefined) {
+      query += ` AND p.base_price >= ?`;
+      countQuery += ` AND p.base_price >= ?`;
+      queryParams.push(filters.minPrice);
+    }
+
+    if (filters.maxPrice !== undefined) {
+      query += ` AND p.base_price <= ?`;
+      countQuery += ` AND p.base_price <= ?`;
+      queryParams.push(filters.maxPrice);
+    }
     
     if (filters.status) {
       query += ` AND p.status = ?`;
@@ -70,11 +100,11 @@ class Product {
       queryParams.push(filters.status);
     }
     
-    // Apply sorting
-    const sortBy = filters.sortBy || 'created_at';
-    const sortOrder = filters.sortOrder || 'DESC';
-    query += ` ORDER BY p.${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
+    // Apply sorting - whitelist to prevent SQL injection
+    const ALLOWED_SORT_FIELDS = ['name', 'base_price', 'cost_price', 'created_at', 'status'];
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(filters.sortBy) ? filters.sortBy : 'created_at';
+    const sortOrder = (filters.sortOrder || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    query += ` ORDER BY p.${safeSortBy} ${sortOrder} LIMIT ${limit} OFFSET ${offset}`;
     
     const [products] = await pool.execute(query, queryParams);
     
@@ -86,6 +116,8 @@ class Product {
     }
     if (filters.categoryId) countParams.push(filters.categoryId);
     if (filters.brandId) countParams.push(filters.brandId);
+    if (filters.minPrice !== undefined) countParams.push(filters.minPrice);
+    if (filters.maxPrice !== undefined) countParams.push(filters.maxPrice);
     if (filters.status) countParams.push(filters.status);
     
     const [totalResult] = await pool.execute(countQuery, countParams);
@@ -164,15 +196,42 @@ class Product {
 
 class ProductVariant {
   static async create(variantData) {
-    const { 
-      productId, variantName, sku, price, quantityInStock = 0, attributes 
+    const {
+      productId, variantName, sku, price, quantityInStock = 0, attributes
     } = variantData;
-    
+    // Prepare attributes for storage: only store valid JSON strings
+    let attributesToStore = null;
+    if (attributes !== undefined && attributes !== null) {
+      if (typeof attributes === 'object') {
+        try {
+          attributesToStore = JSON.stringify(attributes);
+        } catch (err) {
+          attributesToStore = null;
+        }
+      } else if (typeof attributes === 'string') {
+        // If a string, ensure it's valid JSON first
+        try {
+          JSON.parse(attributes);
+          attributesToStore = attributes;
+        } catch (err) {
+          // not valid JSON - don't store to avoid later parse errors
+          attributesToStore = null;
+        }
+      }
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO product_variants (product_id, variant_name, sku, price, 
                                    quantity_in_stock, attributes) 
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [productId, variantName, sku, price, quantityInStock, JSON.stringify(attributes)]
+      [
+        Number(productId),
+        variantName ?? null,
+        sku ?? null,
+        price ?? null,
+        quantityInStock ?? 0,
+        attributesToStore
+      ]
     );
     
     return result.insertId;
@@ -188,7 +247,14 @@ class ProductVariant {
     );
     
     if (variants[0] && variants[0].attributes) {
-      variants[0].attributes = JSON.parse(variants[0].attributes);
+      try {
+        variants[0].attributes = JSON.parse(variants[0].attributes);
+      } catch (err) {
+        // If stored value is not valid JSON (e.g. "[object Object]"), fallback to null
+        // eslint-disable-next-line no-console
+        console.warn('ProductVariant.findById: failed to parse attributes, returning null', variants[0].attributes);
+        variants[0].attributes = null;
+      }
     }
     
     return variants[0];
@@ -200,10 +266,22 @@ class ProductVariant {
       [productId]
     );
     
-    return variants.map(variant => ({
-      ...variant,
-      attributes: variant.attributes ? JSON.parse(variant.attributes) : null
-    }));
+    return variants.map(variant => {
+      let attrs = null;
+      if (variant.attributes) {
+        try {
+          attrs = JSON.parse(variant.attributes);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('ProductVariant.findByProductId: failed to parse attributes, returning null', variant.attributes);
+          attrs = null;
+        }
+      }
+      return {
+        ...variant,
+        attributes: attrs
+      };
+    });
   }
 
   static async updateById(id, updateData) {
@@ -215,7 +293,25 @@ class ProductVariant {
       if (allowedFields.includes(key) && updateData[key] !== undefined) {
         if (key === 'attributes') {
           fields.push(`${key} = ?`);
-          values.push(JSON.stringify(updateData[key]));
+          const attrs = updateData[key];
+          if (attrs === null) {
+            values.push(null);
+          } else if (typeof attrs === 'object') {
+            try {
+              values.push(JSON.stringify(attrs));
+            } catch (err) {
+              values.push(null);
+            }
+          } else if (typeof attrs === 'string') {
+            try {
+              JSON.parse(attrs);
+              values.push(attrs);
+            } catch (err) {
+              values.push(null);
+            }
+          } else {
+            values.push(null);
+          }
         } else {
           fields.push(`${key} = ?`);
           values.push(updateData[key]);
@@ -261,7 +357,13 @@ class ProductVariant {
     );
     
     if (variants[0] && variants[0].attributes) {
-      variants[0].attributes = JSON.parse(variants[0].attributes);
+      try {
+        variants[0].attributes = JSON.parse(variants[0].attributes);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('ProductVariant.findBySku: failed to parse attributes, returning null', variants[0].attributes);
+        variants[0].attributes = null;
+      }
     }
     
     return variants[0];

@@ -193,6 +193,8 @@ const initializeTables = async () => {
     connection.release();
   } catch (error) {
     console.error('❌ Error initializing tables:', error.message);
+    connection.release();
+    throw error;
   }
 };
 

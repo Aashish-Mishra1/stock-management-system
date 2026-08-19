@@ -8,6 +8,16 @@ const purchaseApi = baseApi.injectEndpoints({
         method: 'GET',
         params: query
       }),
+      transformResponse: (response: any) => {
+        const result = response?.data ?? {};
+        const data = result?.purchases ?? result ?? [];
+        const meta = {
+          total: result?.total ?? 0,
+          page: result?.page ?? 1,
+          totalPages: result?.totalPages ?? 1,
+        };
+        return { ...response, data, meta };
+      },
       providesTags: ['purchases']
     }),
 
@@ -15,6 +25,15 @@ const purchaseApi = baseApi.injectEndpoints({
       query: (payload) => ({
         url: '/purchases',
         method: 'POST',
+        body: payload
+      }),
+      invalidatesTags: ['purchases']
+    }),
+
+    updatePurchase: builder.mutation({
+      query: ({ id, payload }) => ({
+        url: '/purchases/' + id,
+        method: 'PUT',
         body: payload
       }),
       invalidatesTags: ['purchases']
@@ -30,4 +49,4 @@ const purchaseApi = baseApi.injectEndpoints({
   })
 })
 
-export const { useGetAllPurchasesQuery, useCreatePurchaseMutation, useDeletePurchaseMutation } = purchaseApi
+export const { useGetAllPurchasesQuery, useCreatePurchaseMutation, useUpdatePurchaseMutation, useDeletePurchaseMutation } = purchaseApi

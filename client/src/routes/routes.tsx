@@ -7,7 +7,6 @@ import NotFound from '../pages/NotFound';
 import ProfilePage from '../pages/ProfilePage';
 import SaleHistoryPage from '../pages/SaleHistoryPage';
 import LoginPage from '../pages/auth/LoginPage';
-import RegisterPage from '../pages/auth/RegisterPage';
 import ProductManagePage from '../pages/managements/ProductManagePage';
 import PurchaseManagementPage from '../pages/managements/PurchaseManagementPage';
 import SaleManagementPage from '../pages/managements/SaleManagementPage';
@@ -103,6 +102,5 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/login', element: <LoginPage /> },
-  { path: '/register', element: <RegisterPage /> },
   { path: '*', element: <NotFound /> },
 ]);

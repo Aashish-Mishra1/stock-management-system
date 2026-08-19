@@ -30,7 +30,7 @@ const EditModal = () => {
     try {
       const res = await updateProduct({ id: updateDate?._id, payload }).unwrap();
 
-      if (res.statusCode === 200) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         dispatch(toggleUpdateModel({ open: false, data: null }));
       }

@@ -11,7 +11,7 @@ const CreateCategory = () => {
   const handleClick = async () => {
     try {
       const res = await createCategory({ name: category }).unwrap();
-      if (res.statusCode === 201) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         setCategory('');
       }

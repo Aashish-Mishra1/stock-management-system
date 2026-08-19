@@ -1,11 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
-const { 
-  validateRequest, 
-  categorySchema, 
-  paginationSchema 
-} = require('../middleware/validation');
+const { validateRequest, categorySchema } = require('../middleware/validation');
 const {
   createCategory,
   getCategories,
@@ -19,7 +15,7 @@ const {
 router.use(authenticate);
 
 // Category routes
-router.get('/', validateRequest(paginationSchema), getCategories);
+router.get('/', getCategories);
 router.get('/all', getAllCategories);
 router.post('/', validateRequest(categorySchema), createCategory);
 router.get('/:id', getCategory);

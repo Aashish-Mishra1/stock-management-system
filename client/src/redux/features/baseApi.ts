@@ -8,8 +8,25 @@ const baseQuery = fetchBaseQuery({
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as RootState).auth.token
 
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
+    let authToken = token;
+    // Fallback: try to read persisted token from localStorage (redux-persist)
+    if (!authToken) {
+      try {
+        const raw = localStorage.getItem('persist:auth');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          // parsed may store token as string or JSON string
+          authToken = parsed?.token ?? (typeof parsed === 'string' ? JSON.parse(parsed)?.token : undefined);
+        }
+      } catch (e) {
+        // ignore
+      }
+      // also support a plain `token` key if present
+      if (!authToken) authToken = localStorage.getItem('token') ?? undefined;
+    }
+
+    if (authToken) {
+      headers.set('Authorization', `Bearer ${authToken}`)
     }
 
     return headers

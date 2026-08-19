@@ -4,7 +4,7 @@ const { Category, Brand } = require('../models/Category');
 const createCategory = async (req, res, next) => {
   try {
     const { name, description } = req.validatedData.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if category name already exists for this user
     const existingCategory = await Category.findByName(name, userId);
@@ -36,8 +36,10 @@ const createCategory = async (req, res, next) => {
 
 const getCategories = async (req, res, next) => {
   try {
-    const { page, limit, search } = req.validatedData.query;
-    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const { search } = req.query;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const result = await Category.findByUserId(userId, page, limit, search);
     
@@ -53,7 +55,7 @@ const getCategories = async (req, res, next) => {
 
 const getAllCategories = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const categories = await Category.getAllByUserId(userId);
     
@@ -70,7 +72,7 @@ const getAllCategories = async (req, res, next) => {
 const getCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const category = await Category.findById(parseInt(id));
     
@@ -103,7 +105,7 @@ const updateCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if category exists and belongs to user
     const existingCategory = await Category.findById(parseInt(id));
@@ -153,7 +155,7 @@ const updateCategory = async (req, res, next) => {
 const deleteCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if category exists and belongs to user
     const category = await Category.findById(parseInt(id));
@@ -187,7 +189,7 @@ const deleteCategory = async (req, res, next) => {
 const createBrand = async (req, res, next) => {
   try {
     const { name, description } = req.validatedData.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if brand name already exists for this user
     const existingBrand = await Brand.findByName(name, userId);
@@ -219,8 +221,10 @@ const createBrand = async (req, res, next) => {
 
 const getBrands = async (req, res, next) => {
   try {
-    const { page, limit, search } = req.validatedData.query;
-    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const { search } = req.query;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const result = await Brand.findByUserId(userId, page, limit, search);
     
@@ -236,7 +240,7 @@ const getBrands = async (req, res, next) => {
 
 const getAllBrands = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const brands = await Brand.getAllByUserId(userId);
     
@@ -253,7 +257,7 @@ const getAllBrands = async (req, res, next) => {
 const getBrand = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     const brand = await Brand.findById(parseInt(id));
     
@@ -286,7 +290,7 @@ const updateBrand = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if brand exists and belongs to user
     const existingBrand = await Brand.findById(parseInt(id));
@@ -336,7 +340,7 @@ const updateBrand = async (req, res, next) => {
 const deleteBrand = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id ?? (process.env.DEV_USER_ID ? Number(process.env.DEV_USER_ID) : null);
     
     // Check if brand exists and belongs to user
     const brand = await Brand.findById(parseInt(id));

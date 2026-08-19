@@ -32,7 +32,9 @@ const columns: TableColumnsType<any> = [
 ];
 
 const HistoryTable = ({ data, isFetching }: { data: { data: IData[] }; isFetching: boolean }) => {
-  const tableData = data?.data?.map((row: IData) => ({
+  const items: IData[] = Array.isArray((data as any)) ? (data as any) : (data?.data ?? []);
+
+  const tableData = items.map((row: IData) => ({
     key: row._id,
     date: generateDate({ year: row.year, week: row.week, month: row.month, day: row.day }),
     totalQuantity: row.totalQuantity,

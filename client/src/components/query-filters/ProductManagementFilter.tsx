@@ -4,15 +4,18 @@ import {useGetAllCategoriesQuery} from '../../redux/features/management/category
 import {useGetAllBrandsQuery} from '../../redux/features/management/brandApi';
 
 interface ProductManagementFilterProps {
-  query: {name: string; category: string; brand: string; limit: number};
+  query: { name: string; category: string; brand: string; limit: number; minPrice?: number; maxPrice?: number };
   setQuery: React.Dispatch<
-    React.SetStateAction<{name: string; category: string; brand: string; limit: number}>
+    React.SetStateAction<{ name: string; category: string; brand: string; limit: number; minPrice?: number; maxPrice?: number }>
   >;
 }
 
 const ProductManagementFilter = ({query, setQuery}: ProductManagementFilterProps) => {
   const {data: categories} = useGetAllCategoriesQuery(undefined);
   const {data: brands} = useGetAllBrandsQuery(undefined);
+
+  const categoryItems = Array.isArray((categories as any)) ? (categories as any) : (categories?.data ?? []);
+  const brandItems = Array.isArray((brands as any)) ? (brands as any) : (brands?.data ?? []);
 
   return (
     <Flex
@@ -30,9 +33,10 @@ const ProductManagementFilter = ({query, setQuery}: ProductManagementFilterProps
           <Slider
             range
             step={100}
-            max={20000}
-            defaultValue={[1000, 5000]}
-            onChange={(value) => {
+            min={0}
+            max={2000}
+            value={[query.minPrice ?? 100, query.maxPrice ?? 1000]}
+            onChange={(value: number[]) => {
               setQuery((prev) => ({
                 ...prev,
                 minPrice: value[0],
@@ -61,8 +65,8 @@ const ProductManagementFilter = ({query, setQuery}: ProductManagementFilterProps
             onBlur={(e) => setQuery((prev) => ({...prev, category: e.target.value}))}
           >
             <option value=''>Filter by Category</option>
-            {categories?.data?.map((category: {_id: string; name: string}) => (
-              <option value={category._id} key={category._id}>
+            {categoryItems.map((category: any) => (
+              <option value={category._id ?? category.id} key={category._id ?? category.id}>
                 {category.name}
               </option>
             ))}
@@ -78,8 +82,8 @@ const ProductManagementFilter = ({query, setQuery}: ProductManagementFilterProps
             onBlur={(e) => setQuery((prev) => ({...prev, brand: e.target.value}))}
           >
             <option value=''>Filter by Brand</option>
-            {brands?.data?.map((brand: {_id: string; name: string}) => (
-              <option value={brand._id} key={brand._id}>
+            {brandItems.map((brand: any) => (
+              <option value={brand._id ?? brand.id} key={brand._id ?? brand.id}>
                 {brand.name}
               </option>
             ))}

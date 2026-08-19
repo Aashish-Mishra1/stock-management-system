@@ -1,11 +1,38 @@
-import { Button, Col, Flex, Row } from 'antd';
+import { Button, Col, Row } from 'antd';
+import React from 'react';
+
+type FlexProps = React.HTMLAttributes<HTMLDivElement> & {
+  vertical?: boolean;
+  justify?: 'center' | 'start' | 'end' | 'between' | 'around';
+};
+
+const Flex: React.FC<FlexProps> = ({ vertical, justify, style, children, ...rest }) => {
+  const justifyMap: any = {
+    center: 'center',
+    start: 'flex-start',
+    end: 'flex-end',
+    between: 'space-between',
+    around: 'space-around',
+  };
+  const mergedStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: vertical ? 'column' : 'row',
+    justifyContent: justify ? justifyMap[justify] : undefined,
+    ...style,
+  };
+  return (
+    <div style={mergedStyle} {...rest}>
+      {children}
+    </div>
+  );
+};
 import { FieldValues, useForm } from 'react-hook-form';
 import CustomInput from '../components/CustomInput';
 import toastMessage from '../lib/toastMessage';
 import { useGetAllBrandsQuery } from '../redux/features/management/brandApi';
 import { useGetAllCategoriesQuery } from '../redux/features/management/categoryApi';
-import { useCreateNewProductMutation } from '../redux/features/management/productApi';
-import { useGetAllSellerQuery } from '../redux/features/management/sellerApi';
+import { useCreateNewProductMutation, useCreateVariantMutation } from '../redux/features/management/productApi';
+import { useGetAllSellerListQuery } from '../redux/features/management/sellerApi';
 import { ICategory } from '../types/product.types';
 import CreateSeller from '../components/product/CreateSeller';
 import CreateCategory from '../components/product/CreateCategory';
@@ -14,9 +41,14 @@ import { SpinnerIcon } from '@phosphor-icons/react';
 
 const CreateProduct = () => {
   const [createNewProduct, { isLoading: isCreatingProduct }] = useCreateNewProductMutation();
+  const [createVariant] = useCreateVariantMutation();
   const { data: categories } = useGetAllCategoriesQuery(undefined);
-  const { data: sellers } = useGetAllSellerQuery(undefined);
+  const { data: sellers } = useGetAllSellerListQuery(undefined);
   const { data: brands } = useGetAllBrandsQuery(undefined);
+
+  const sellerItems = Array.isArray((sellers as any)) ? (sellers as any) : (sellers?.data ?? []);
+  const categoryItems = Array.isArray((categories as any)) ? (categories as any) : (categories?.data ?? []);
+  const brandItems = Array.isArray((brands as any)) ? (brands as any) : (brands?.data ?? []);
 
   const {
     handleSubmit,
@@ -26,22 +58,43 @@ const CreateProduct = () => {
   } = useForm();
 
   const onSubmit = async (data: FieldValues) => {
-    const payload = { ...data };
-    payload.price = Number(data.price);
-    payload.stock = Number(data.stock);
+    // Build payload that matches backend productSchema
+    const payload: any = {
+      name: String(data.name).trim(),
+      description: data.description ? String(data.description).trim() : undefined,
+      sku: data.sku ? String(data.sku).trim() : undefined,
+      basePrice: Number(data.price),
+    };
 
-    if (payload.size === '') {
-      delete payload.size;
-    }
+    if (data.category) payload.categoryId = Number(data.category);
+    if (data.brand) payload.brandId = Number(data.brand);
+    if (data.size && data.size !== '') payload.size = data.size;
 
     try {
       const res = await createNewProduct(payload).unwrap();
-      if (res.statusCode === 201) {
+      if (res.success) {
+        // If stock provided, create a default variant with that stock
+        const createdProduct = res.data?.product ?? res?.product ?? null;
+        if (createdProduct && data.stock) {
+          try {
+            await createVariant({
+              productId: createdProduct.id ?? createdProduct._id ?? createdProduct.key,
+              variantName: 'Default',
+              price: Number(data.price),
+              quantityInStock: Number(data.stock),
+            }).unwrap();
+          } catch (err) {
+            // variant creation failed, but product was created — notify user
+            // eslint-disable-next-line no-console
+            console.error('createVariant error', err);
+          }
+        }
+
         toastMessage({ icon: 'success', text: res.message });
         reset();
       }
     } catch (error: any) {
-      toastMessage({ icon: 'error', text: error.data.message });
+      toastMessage({ icon: 'error', text: error.data?.message || error.message });
     }
   };
 
@@ -116,9 +169,12 @@ const CreateProduct = () => {
                     className={`input-field ${errors['seller'] ? 'input-field-error' : ''}`}
                   >
                     <option value=''>Select Seller*</option>
-                    {sellers?.data.map((item: ICategory) => (
-                      <option value={item._id}>{item.name}</option>
-                    ))}
+                    {sellerItems.map((item: any) => {
+                      const key = item.id ?? item._id;
+                      return (
+                        <option value={key} key={key}>{item.name ?? item.username ?? item.seller_name ?? ''}</option>
+                      );
+                    })}
                   </select>
                 </Col>
               </Row>
@@ -135,9 +191,12 @@ const CreateProduct = () => {
                     className={`input-field ${errors['category'] ? 'input-field-error' : ''}`}
                   >
                     <option value=''>Select Category*</option>
-                    {categories?.data.map((item: ICategory) => (
-                      <option value={item._id}>{item.name}</option>
-                    ))}
+                    {categoryItems.map((item: ICategory) => {
+                      const key = (item as any).id ?? (item as any)._id;
+                      return (
+                        <option value={key} key={key}>{item.name}</option>
+                      );
+                    })}
                   </select>
                 </Col>
               </Row>
@@ -154,9 +213,12 @@ const CreateProduct = () => {
                     className={`input-field ${errors['brand'] ? 'input-field-error' : ''}`}
                   >
                     <option value=''>Select brand</option>
-                    {brands?.data.map((item: ICategory) => (
-                      <option value={item._id}>{item.name}</option>
-                    ))}
+                    {brandItems.map((item: ICategory) => {
+                      const key = (item as any).id ?? (item as any)._id;
+                      return (
+                        <option value={key} key={key}>{item.name}</option>
+                      );
+                    })}
                   </select>
                 </Col>
               </Row>

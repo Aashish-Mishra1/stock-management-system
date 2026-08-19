@@ -9,12 +9,12 @@ import {
 } from '../../redux/services/modal.Slice';
 import { IProduct } from '../../types/product.types';
 import ModalInput from './ModalInput';
-import { useCreateNewProductMutation } from '../../redux/features/management/productApi';
+import { useCreateVariantMutation } from '../../redux/features/management/productApi';
 
 const AddStockModal = () => {
   const modalOpen = useAppSelector(getCreateVariantModel);
   const data = useAppSelector(getCreateVariantModelData);
-  const [createVariant] = useCreateNewProductMutation();
+  const [createVariant] = useCreateVariantMutation();
   const dispatch = useAppDispatch();
   const [updateDate, setUpdateDate] = useState<Partial<IProduct>>();
 
@@ -23,25 +23,23 @@ const AddStockModal = () => {
   };
 
   const onSubmit = async () => {
-    const payload: any = { ...updateDate };
-    payload.price = Number(updateDate?.price);
-    payload.stock = Number(updateDate?.stock);
-    delete payload?._id;
-    delete payload.createdAt;
-    delete payload?.updatedAt;
-    delete payload?.__v;
-    delete payload?.user;
+    const payload: any = {
+      productId: Number(updateDate?.id ?? updateDate?.product_id),
+      variantName: updateDate?.name ?? '',
+      sku: (updateDate as any)?.sku ?? null,
+      price: Number(updateDate?.price ?? 0),
+      quantityInStock: Number((updateDate as any)?.quantity ?? updateDate?.stock ?? 0),
+      attributes: updateDate?.size ? { size: updateDate.size } : null,
+    };
 
     try {
       const res = await createVariant(payload).unwrap();
-      console.log(res);
-
-      if (res.statusCode === 201) {
+      if (res.success) {
         toastMessage({ icon: 'success', text: res.message });
         dispatch(toggleCreateVariantModel({ open: false, data: null }));
       }
     } catch (error: any) {
-      toastMessage({ icon: 'error', title: error.data.message, text: error.data.errors[0] });
+      toastMessage({ icon: 'error', title: error?.data?.message ?? 'Error', text: error?.data?.errors?.[0] ?? String(error) });
     }
   };
 

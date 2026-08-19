@@ -6,6 +6,9 @@ import App from './App.tsx';
 import { persistor, store } from './redux/store.ts';
 import './index.css';
 import { Toaster } from 'sonner';
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { baseApi } from './redux/features/baseApi';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -23,7 +26,21 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             },
           }}
         />
+        <HydrateRefetch />
       </PersistGate>
     </Provider>
   </React.StrictMode>
 );
+
+function HydrateRefetch() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    const token = (store.getState() as any).auth?.token;
+    if (token) {
+      dispatch(baseApi.util.invalidateTags(['product', 'sale', 'seller', 'category', 'brand', 'purchases']));
+    }
+  }, [dispatch]);
+
+  return null;
+}

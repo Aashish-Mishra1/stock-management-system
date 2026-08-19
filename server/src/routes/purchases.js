@@ -1,11 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
-const { 
-  validateRequest, 
-  purchaseSchema, 
-  paginationSchema 
-} = require('../middleware/validation');
+const { validateRequest, purchaseSchema } = require('../middleware/validation');
 const {
   createPurchase,
   getPurchases,
@@ -19,7 +15,7 @@ const {
 router.use(authenticate);
 
 // Purchase routes
-router.get('/', validateRequest(paginationSchema), getPurchases);
+router.get('/', getPurchases);
 router.post('/', validateRequest(purchaseSchema), createPurchase);
 router.get('/dashboard-stats', getPurchaseDashboardStats);
 router.get('/:id', getPurchase);

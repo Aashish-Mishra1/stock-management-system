@@ -4,9 +4,16 @@ const brandApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getAllBrands: builder.query({
       query: () => ({
-        url: '/brands',
+        url: '/brands/all',
         method: 'GET'
       }),
+      transformResponse: (response: any) => {
+        const items = response?.data?.brands ?? response?.data ?? [];
+        const data = Array.isArray(items)
+          ? items.map((it: any) => ({ ...it, _id: it.id ?? it._id }))
+          : [];
+        return { ...response, data };
+      },
       providesTags: ['brand']
     }),
     createBrand: builder.mutation({

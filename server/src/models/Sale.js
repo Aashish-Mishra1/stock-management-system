@@ -17,7 +17,14 @@ class Sale {
         `INSERT INTO sales (customer_name, customer_email, customer_phone, 
                            payment_method, user_id, total_amount) 
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [customerName, customerEmail, customerPhone, paymentMethod, userId, totalAmount]
+        [
+          customerName ?? null,
+          customerEmail ?? null,
+          customerPhone ?? null,
+          paymentMethod ?? null,
+          userId ?? null,
+          totalAmount ?? null,
+        ]
       );
       
       const saleId = saleResult.insertId;
@@ -41,13 +48,13 @@ class Sale {
         await connection.execute(
           `INSERT INTO sale_items (sale_id, product_variant_id, quantity, unit_price, total_price) 
            VALUES (?, ?, ?, ?, ?)`,
-          [saleId, productVariantId, quantity, unitPrice, totalPrice]
+          [saleId ?? null, productVariantId ?? null, quantity ?? null, unitPrice ?? null, totalPrice ?? null]
         );
         
         // Update stock
         await connection.execute(
           'UPDATE product_variants SET quantity_in_stock = quantity_in_stock - ? WHERE id = ?',
-          [quantity, productVariantId]
+          [quantity ?? 0, productVariantId ?? null]
         );
       }
       
@@ -90,64 +97,63 @@ class Sale {
   }
 
   static async findByUserId(userId, page = 1, limit = 10, filters = {}) {
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
     const offset = (page - 1) * limit;
-    let query = `
-      SELECT s.*, COUNT(si.id) as total_items
-      FROM sales s
-      LEFT JOIN sale_items si ON s.id = si.sale_id
+    // Return flattened sale items joined with product and sale metadata so frontend can render per-item rows
+    let baseQuery = `
+      SELECT si.id as sale_item_id, si.sale_id, si.product_variant_id, si.quantity, si.unit_price, si.total_price,
+             pv.variant_name, p.name as product_name,
+             s.customer_name, s.customer_email, s.sale_date, s.total_amount as sale_total
+      FROM sale_items si
+      JOIN sales s ON si.sale_id = s.id
+      LEFT JOIN product_variants pv ON si.product_variant_id = pv.id
+      LEFT JOIN products p ON pv.product_id = p.id
       WHERE s.user_id = ?
     `;
-    
-    let countQuery = 'SELECT COUNT(*) as total FROM sales WHERE user_id = ?';
-    const queryParams = [userId];
-    
-    // Apply date filters
+
+    const params = [userId];
+
     if (filters.startDate) {
-      query += ` AND s.sale_date >= ?`;
-      countQuery += ` AND s.sale_date >= ?`;
-      queryParams.push(filters.startDate);
+      baseQuery += ` AND s.sale_date >= ?`;
+      params.push(filters.startDate);
     }
-    
     if (filters.endDate) {
-      query += ` AND s.sale_date <= ?`;
-      countQuery += ` AND s.sale_date <= ?`;
-      queryParams.push(filters.endDate);
+      baseQuery += ` AND s.sale_date <= ?`;
+      params.push(filters.endDate);
     }
-    
-    // Apply search filter
     if (filters.search) {
-      query += ` AND (s.customer_name LIKE ? OR s.customer_email LIKE ?)`;
-      countQuery += ` AND (s.customer_name LIKE ? OR s.customer_email LIKE ?)`;
-      const searchParam = `%${filters.search}%`;
-      queryParams.push(searchParam, searchParam);
+      baseQuery += ` AND (p.name LIKE ? OR s.customer_name LIKE ? OR s.customer_email LIKE ?)`;
+      const sp = `%${filters.search}%`;
+      params.push(sp, sp, sp);
     }
-    
-    // Apply payment method filter
-    if (filters.paymentMethod) {
-      query += ` AND s.payment_method = ?`;
-      countQuery += ` AND s.payment_method = ?`;
-      queryParams.push(filters.paymentMethod);
-    }
-    
-    query += ` GROUP BY s.id ORDER BY s.sale_date DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
-    
-    const [sales] = await pool.execute(query, queryParams);
-    
-    // Get total count
+
+    baseQuery += ` ORDER BY s.sale_date DESC LIMIT ${limit} OFFSET ${offset}`;
+
+    const [rows] = await pool.execute(baseQuery, params);
+
+    // total count for pagination (count of sale_items for this user)
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM sale_items si
+      JOIN sales s ON si.sale_id = s.id
+      LEFT JOIN product_variants pv ON si.product_variant_id = pv.id
+      LEFT JOIN products p ON pv.product_id = p.id
+      WHERE s.user_id = ?
+    `;
     const countParams = [userId];
     if (filters.startDate) countParams.push(filters.startDate);
     if (filters.endDate) countParams.push(filters.endDate);
     if (filters.search) {
-      const searchParam = `%${filters.search}%`;
-      countParams.push(searchParam, searchParam);
+      countQuery += ` AND (p.name LIKE ? OR s.customer_name LIKE ? OR s.customer_email LIKE ?)`;
+      const sp = `%${filters.search}%`;
+      countParams.push(sp, sp, sp);
     }
-    if (filters.paymentMethod) countParams.push(filters.paymentMethod);
-    
+
     const [totalResult] = await pool.execute(countQuery, countParams);
-    
+
     return {
-      sales,
+      sales: rows,
       total: totalResult[0].total,
       page,
       totalPages: Math.ceil(totalResult[0].total / limit)
@@ -292,6 +298,52 @@ class Sale {
       ...todayStats[0],
       ...monthStats[0]
     };
+  }
+
+  static async getSalesByPeriod(userId, period = 'daily') {
+    let selectFields, groupBy;
+
+    switch (period) {
+      case 'yearly':
+        selectFields = `YEAR(sale_date) AS year`;
+        groupBy = `YEAR(sale_date)`;
+        break;
+      case 'monthly':
+        selectFields = `YEAR(sale_date) AS year, MONTH(sale_date) AS month`;
+        groupBy = `YEAR(sale_date), MONTH(sale_date)`;
+        break;
+      case 'weekly':
+        selectFields = `YEAR(sale_date) AS year, WEEK(sale_date) AS week`;
+        groupBy = `YEAR(sale_date), WEEK(sale_date)`;
+        break;
+      default: // daily
+        selectFields = `YEAR(sale_date) AS year, MONTH(sale_date) AS month, DAY(sale_date) AS day`;
+        groupBy = `YEAR(sale_date), MONTH(sale_date), DAY(sale_date)`;
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT
+         ${selectFields},
+         COALESCE(SUM(si.quantity), 0) AS totalQuantity,
+         COALESCE(SUM(s.total_amount), 0) AS totalRevenue
+       FROM sales s
+       LEFT JOIN sale_items si ON si.sale_id = s.id
+       WHERE s.user_id = ?
+       GROUP BY ${groupBy}
+       ORDER BY ${groupBy} DESC
+       LIMIT 30`,
+      [userId]
+    );
+
+    return rows.map((row, i) => ({
+      _id: `${period}-${i}`,
+      year: row.year,
+      month: row.month ?? undefined,
+      week: row.week ?? undefined,
+      day: row.day ?? undefined,
+      totalQuantity: Number(row.totalQuantity),
+      totalRevenue: Number(row.totalRevenue)
+    }));
   }
 
   static async getTopProducts(userId, limit = 10) {

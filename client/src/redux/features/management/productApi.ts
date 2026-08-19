@@ -4,63 +4,92 @@ const productApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getAllProducts: builder.query({
       query: (query) => ({
-  url: '/products',
+        url: '/products',
         method: 'GET',
         params: query
       }),
+      transformResponse: (response: any) => {
+        // Backend returns { success: true, data: { products: [...], total, page, totalPages } }
+        const result = response?.data ?? {};
+        const data = result?.products ?? result ?? [];
+        const meta = {
+          total: result?.total ?? 0,
+          page: result?.page ?? 1,
+          totalPages: result?.totalPages ?? 1,
+        };
+        return { ...response, data, meta };
+      },
       providesTags: ['product']
     }),
     countProducts: builder.query({
-      query: (query) => ({
-  url: '/products/total',
+      query: () => ({
+        url: '/products/total',
         method: 'GET',
-        params: query
       }),
       providesTags: ['product']
     }),
     getSingleProduct: builder.query({
       query: (id) => ({
-  url: `/products/${id}`,
+        url: `/products/${id}`,
         method: 'GET'
       }),
       providesTags: ['product']
     }),
     createNewProduct: builder.mutation({
       query: (payload) => ({
-  url: '/products',
+        url: '/products',
         method: 'POST',
-        body: payload,
-      }),
-      invalidatesTags: ['product']
-    }),
-    addStock: builder.mutation({
-      query: ({ id, payload }) => ({
-  url: `/products/${id}/add`,
-        method: 'PATCH',
         body: payload,
       }),
       invalidatesTags: ['product']
     }),
     deleteProduct: builder.mutation({
       query: (id) => ({
-  url: `/products/${id}`,
+        url: `/products/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['product']
     }),
     updateProduct: builder.mutation({
       query: ({ id, payload }) => ({
-  url: `/products/${id}`,
-        method: 'PATCH',
+        url: `/products/${id}`,
+        method: 'PUT',
         body: payload
       }),
       invalidatesTags: ['product']
     }),
-    bulkDelete: builder.mutation({
+    createVariant: builder.mutation({
       query: (payload) => ({
-  url: '/products/bulk-delete',
+        url: '/products/variants',
         method: 'POST',
         body: payload
+      }),
+      invalidatesTags: ['product']
+    }),
+    getProductVariants: builder.query({
+      query: (productId) => ({
+        url: `/products/${productId}/variants`,
+        method: 'GET'
+      }),
+      transformResponse: (response: any) => {
+        const result = response?.data ?? {};
+        const data = result?.variants ?? result ?? [];
+        return { ...response, data };
+      },
+      providesTags: ['product']
+    }),
+    updateVariant: builder.mutation({
+      query: ({ id, payload }) => ({
+        url: `/products/variants/${id}`,
+        method: 'PUT',
+        body: payload
+      }),
+      invalidatesTags: ['product']
+    }),
+    deleteVariant: builder.mutation({
+      query: (id) => ({
+        url: `/products/variants/${id}`,
+        method: 'DELETE',
       }),
       invalidatesTags: ['product']
     }),
@@ -71,8 +100,11 @@ export const {
   useGetAllProductsQuery,
   useCountProductsQuery,
   useCreateNewProductMutation,
-  useAddStockMutation,
   useDeleteProductMutation,
   useGetSingleProductQuery,
   useUpdateProductMutation,
-  useBulkDeleteMutation } = productApi
+  useCreateVariantMutation,
+  useUpdateVariantMutation,
+  useDeleteVariantMutation,
+  useGetProductVariantsQuery,
+} = productApi

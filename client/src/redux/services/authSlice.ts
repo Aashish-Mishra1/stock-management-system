@@ -2,8 +2,9 @@ import { PayloadAction, createSlice } from '@reduxjs/toolkit';
 import { RootState } from '../store';
 
 export type TUser = {
-  _id: string
+  userId: number
   email: string
+  role: string
   exp: number
   iat: number
 }
