@@ -37,12 +37,12 @@
     "typescript": "^5.2.2",
     "vite": "^5.0.8"
   },
-  "homepage": "https://github.com/mhShohan/inventory-management-system",
+  "homepage": "https://github.com/Aashish-Mishra1/stock-management-system",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mhShohan/inventory-management-system.git"
+    "url": "https://github.com/Aashish-Mishra1/stock-management-system"
   },
-  "author": "mhShohan",
+  "author": "Aashish Mishra",
   "license": "MIT",
   "keywords": [
     "inventory management system",
